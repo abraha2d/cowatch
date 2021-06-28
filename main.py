@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 
 import asyncio
-import traceback
+import re
+import sqlite3
 from datetime import datetime, timedelta
 from hashlib import sha256
-from time import sleep
+from os.path import expanduser
+from time import sleep, time
 
 import pytz
 from dateutil.rrule import rrule, DAILY
@@ -70,6 +72,7 @@ async def find_sessions():
         for slot in session['slots']:
             print(f"  - {slot}")
         print(f"- Address: {session['address']}")
+        print(f"- District: {session['district_name']}")
         print(f"- Fee: {session['fee']} INR")
 
     return sessions
@@ -106,45 +109,55 @@ async def schedule_appointment(session_id, slot, token):
     return acn
 
 
-def get_token():
-    txn_id = generate_otp()
-    otp = ""
-    while otp == "":
-        otp = input("Please enter the OTP: ")
+async def get_token():
+    while True:
+        txn_id = await generate_otp()
+        otp = input("OTP requested. Please enter it: ")
         try:
-            return validate_otp(txn_id, otp)
+            return await validate_otp(txn_id, otp)
         except Exception:
-            txn_id = generate_otp()
-            otp = ""
+            print("Validation failed!")
+
+
+async def get_token_auto():
+    con = sqlite3.connect(expanduser("~/Library/Messages/chat.db"))
+    cur = con.cursor()
+    query = """select text, date from message inner join handle on handle.rowid = handle_id
+     where uncanonicalized_id = "AX-NHPSMS" order by date desc limit 1"""
+
+    while True:
+        _, last_date = cur.execute(query).fetchone()
+        txn_id, otp = await generate_otp(), ""
+
+        s = time()
+        while otp == "" and time() - s < 300:
+            t, d = cur.execute(query).fetchone()
+            if d != last_date:
+                otp = re.search("\d{6}", t).group(0)
+            else:
+                sleep(1)
+
+        if otp != "":
+            try:
+                return await validate_otp(txn_id, otp)
+            except Exception:
+                print("Validation failed!")
 
 
 async def main():
-    token = None
+    token, token_ts = None, None
     cycle_delay = (60 * len(DISTRICTS) * LOOKAHEAD) / MAX_CALLS_PER_MIN
 
     while True:
         try:
-            if token is None:
-                token = ""
-            else:
-                print(f"Sleeping for {cycle_delay} seconds...")
-                sleep(cycle_delay)
-
             sessions = await find_sessions()
             if len(sessions) == 0:
                 continue
 
-            if not token:
-                # input("Press ENTER to send an OTP: ")
-                token = get_token()
-
             for session in sessions:
-                try:
-                    acn = schedule_appointment(session['session_id'], session['slots'][-1], token)
-                except Exception:
-                    traceback.print_exc()
-                    token = get_token()
-                    acn = schedule_appointment(session['session_id'], session['slots'][-1], token)
+                if token is None or token_ts - time() > 1000:
+                    token, token_ts = await get_token(), time()
+                acn = schedule_appointment(session['session_id'], session['slots'][-1], token)
                 if acn is not None:
                     print(
                         "Booked appointment"
@@ -154,11 +167,11 @@ async def main():
                     )
                     print(f"District: {session['district_name']}    Address: {session['address']}")
                     print(f"Fee: {session['fee']} INR    Confirmation ID: {acn}")
+                    await close_session()
                     return
         finally:
-            pass
-
-    await close_session()
+            print(f"Sleeping for {cycle_delay} seconds...")
+            sleep(cycle_delay)
 
 
 if __name__ == "__main__":
