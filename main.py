@@ -7,9 +7,9 @@ from datetime import datetime
 from hashlib import sha256
 from os.path import expanduser
 from time import sleep, time
+from traceback import print_exc
 
 import pytz
-from aiohttp import ClientProxyConnectionError
 from dateutil.rrule import rrule, DAILY
 
 from config import *
@@ -52,6 +52,7 @@ async def find_sessions():
             district_id=district_id,
             date=search_str,
             top_level="sessions",
+            on_error=[],
         )
         for district_id in DISTRICTS
         for search_str in search_strs
@@ -135,6 +136,7 @@ async def get_token():
         try:
             return await validate_otp(txn_id, otp)
         except Exception:
+            print_exc()
             print("Validation failed!")
 
 
@@ -160,6 +162,7 @@ async def get_token_auto():
             try:
                 return await validate_otp(txn_id, otp)
             except Exception:
+                print_exc()
                 print("Validation failed!")
 
 
@@ -202,8 +205,8 @@ async def main():
                     print()
                     await close_session()
                     return
-        except ClientProxyConnectionError:
-            print(f"Eating proxy connection error... blegh.")
+        except Exception:
+            print_exc()
         finally:
             e = time() - s
             d = max(cycle_delay - e, 0)

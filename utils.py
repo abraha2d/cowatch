@@ -2,19 +2,20 @@ import asyncio
 import random
 from datetime import datetime
 from json import JSONDecodeError
+from traceback import print_exc
 
-import aiohttp
+from aiohttp import ClientError, ClientSession
 
 from config import PROXIES
 from cowin_api import HEADERS
 
-client_session: aiohttp.ClientSession = None
+client_session: ClientSession = None
 
 
 def get_session():
     global client_session
     if client_session is None:
-        client_session = aiohttp.ClientSession()
+        client_session = ClientSession()
     return client_session
 
 
@@ -24,7 +25,7 @@ async def close_session():
         await client_session.close()
 
 
-async def fetch(endpoint, top_level, method="GET", token=None, **kwargs):
+async def fetch(endpoint, top_level, method="GET", token=None, on_error=None, **kwargs):
     print(f"DEBUG:{datetime.now()}:{method}:{endpoint}")
     print(f"DEBUG:{datetime.now()}:DATA:{kwargs}")
 
@@ -61,6 +62,12 @@ async def fetch(endpoint, top_level, method="GET", token=None, **kwargs):
             return (await response.json(content_type=None)).get(top_level)
         except JSONDecodeError:
             raise Exception(await response.text())
+        except ClientError:
+            if on_error is None:
+                raise
+            else:
+                print_exc()
+                return on_error
 
 
 async def gather(coroutines):
