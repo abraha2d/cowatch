@@ -20,6 +20,6 @@ SCHEDULE_APPOINTMENT = APPOINTMENT_BASE + "/schedule"
 CANCEL_APPOINTMENT = APPOINTMENT_BASE + "/cancel"
 
 HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:89.0) Gecko/20100101 Firefox/89.0',
+    "User-Agent": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:89.0) Gecko/20100101 Firefox/89.0",
 }
 SECRET = "U2FsdGVkX1/OUHg66F6tQdoWnhADI1mzMlI1hO7O6VihQv0t7C7vo7BM4ZU7dKpuYtEA4k1iFyqpyVlNHN16YQ=="

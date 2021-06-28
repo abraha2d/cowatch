@@ -3,7 +3,7 @@
 import asyncio
 import re
 import sqlite3
-from datetime import datetime, timedelta
+from datetime import datetime
 from hashlib import sha256
 from os.path import expanduser
 from time import sleep, time
@@ -20,10 +20,10 @@ def session_predicate(s):
     if s["vaccine"] != "COVISHIELD":
         return False
 
-    if int(s["min_age_limit"]) != MIN_AGE_LIMIT:
+    if int(s["min_age_limit"]) < MIN_AGE_LIMIT:
         return False
 
-    if int(s[f"available_capacity_dose{DOSE}"]) < len(BENEFICIARIES):
+    if int(s[f"available_capacity_dose{DOSE}"]) == 0:
         return False
 
     return True
@@ -41,8 +41,9 @@ async def find_sessions():
     #
     # sessions = flatten(center['sessions'] for center in flatten(data))
     # max_date = max(datetime.strptime(session['date'], "%d-%m-%Y").date() for session in sessions)
-    max_date = now_date + timedelta(days=LOOKAHEAD - 1)
-    search_strs = [d.strftime("%d-%m-%Y") for d in rrule(DAILY, dtstart=now_date, until=max_date, count=LOOKAHEAD)]
+    search_strs = [
+        d.strftime("%d-%m-%Y") for d in rrule(DAILY, dtstart=now_date, count=LOOKAHEAD)
+    ]
     print(search_strs)
 
     data = await gather(
@@ -50,8 +51,10 @@ async def find_sessions():
             FIND_BY_DISTRICT,
             district_id=district_id,
             date=search_str,
-            top_level="sessions"
-        ) for district_id in DISTRICTS for search_str in search_strs
+            top_level="sessions",
+        )
+        for district_id in DISTRICTS
+        for search_str in search_strs
     )
 
     sessions = flatten(data)
@@ -69,18 +72,27 @@ async def find_sessions():
             f" (age {session['min_age_limit']}+)"
         )
         print(f"- On {session['date']} @ {session['name']}")
-        for slot in session['slots']:
+        for slot in session["slots"]:
             print(f"  - {slot}")
         print(f"- Address: {session['address']}")
         print(f"- District: {session['district_name']}")
         print(f"- Fee: {session['fee']} INR")
 
+    if len(sessions) > 0:
+        print()
+
     return sessions
 
 
 async def generate_otp():
-    txn_id = await fetch(GENERATE_MOBILE_OTP, mobile=MOBILE, secret=SECRET, top_level="txnId", method="POST")
-    print(txn_id)
+    txn_id = await fetch(
+        GENERATE_MOBILE_OTP,
+        mobile=MOBILE,
+        secret=SECRET,
+        top_level="txnId",
+        method="POST",
+    )
+    print(f"txn_id: {txn_id}")
     return txn_id
 
 
@@ -89,23 +101,31 @@ async def validate_otp(txn_id, otp):
     m.update(otp.encode())
     otp_hash = m.digest().hex()
 
-    token = await fetch(VALIDATE_MOBILE_OTP, txnId=txn_id, otp=otp_hash, top_level="token", method="POST")
-    print(token)
+    token = await fetch(
+        VALIDATE_MOBILE_OTP,
+        txnId=txn_id,
+        otp=otp_hash,
+        top_level="token",
+        method="POST",
+    )
+    print(f"token: {token}")
     return token
 
 
-async def schedule_appointment(session_id, slot, token):
+async def schedule_appointment(
+    session_id, slot, token, num_beneficiaries=len(BENEFICIARIES)
+):
     acn = await fetch(
         SCHEDULE_APPOINTMENT,
         dose=DOSE,
         session_id=session_id,
         slot=slot,
-        beneficiaries=BENEFICIARIES,
+        beneficiaries=BENEFICIARIES[0:num_beneficiaries],
         top_level="appointment_confirmation_no",
         method="POST",
         token=token,
     )
-    print(acn)
+    print(f"acn: {acn}")
     return acn
 
 
@@ -156,17 +176,30 @@ async def main():
 
             for session in sessions:
                 if token is None or token_ts - time() > 1000:
-                    token, token_ts = await get_token(), time()
-                acn = schedule_appointment(session['session_id'], session['slots'][-1], token)
+                    token, token_ts = await get_token_auto(), time()
+                num_beneficiaries = max(
+                    len(BENEFICIARIES), session[f"available_capacity_dose{DOSE}"]
+                )
+                acn = await schedule_appointment(
+                    session["session_id"],
+                    session["slots"][-1],
+                    token,
+                    num_beneficiaries,
+                )
                 if acn is not None:
+                    print()
                     print(
                         "Booked appointment"
                         f" at {session['name']}"
                         f" on {session['date']}"
                         f" between {session['slots'][-1]}"
+                        f" for {num_beneficiaries} persons."
                     )
-                    print(f"District: {session['district_name']}    Address: {session['address']}")
+                    print(
+                        f"District: {session['district_name']}    Address: {session['address']}"
+                    )
                     print(f"Fee: {session['fee']} INR    Confirmation ID: {acn}")
+                    print()
                     await close_session()
                     return
         finally:

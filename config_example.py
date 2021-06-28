@@ -7,7 +7,7 @@ BENEFICIARIES = [
 ]
 
 DOSE = "1"  # "1" or "2"
-MIN_AGE_LIMIT = "45"  # "18", "40", and "45" are common
+MIN_AGE_LIMIT = 45  # 18, 40, and 45 are common
 
 # Districts to search in for available appointments
 # "https://cdn-api.co-vin.in/api/v2/admin/location/states" to get a list of state IDs
@@ -26,5 +26,7 @@ LOOKAHEAD = 2
 # Increase at your own risk
 MAX_CALLS_PER_MIN = 20
 
-# Squid proxy to get around IP address restrictions in the API
-PROXY = "http://squid.example.com:3128"
+# Squid proxies to get around IP address restrictions in the API
+PROXIES = [
+    "http://squid.example.com:3128",
+]
