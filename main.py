@@ -165,7 +165,7 @@ async def get_token_auto():
 
 async def main():
     token, token_ts = None, None
-    cycle_delay = (60 * len(DISTRICTS) * LOOKAHEAD) / MAX_CALLS_PER_MIN
+    cycle_delay = (60 * len(DISTRICTS) * LOOKAHEAD) / (MAX_CALLS_PER_MIN * len(PROXIES))
 
     while True:
         s = time()
@@ -203,7 +203,7 @@ async def main():
                     await close_session()
                     return
         except ClientProxyConnectionError:
-            pass
+            print(f"Eating proxy connection error... blegh.")
         finally:
             e = time() - s
             d = max(cycle_delay - e, 0)
