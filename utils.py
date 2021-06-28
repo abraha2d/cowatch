@@ -43,8 +43,14 @@ async def fetch(endpoint, top_level, method="GET", token=None, **kwargs):
     if token is not None:
         headers["Authorization"] = f"Bearer {token}"
 
+    proxy = random.choice(PROXIES)
+    print(f"DEBUG:{datetime.now()}:PROXY:{proxy}")
+
     async with method(
-        endpoint, **data, headers=HEADERS, proxy=random.choice(PROXIES)
+        endpoint,
+        **data,
+        headers=HEADERS,
+        proxy=proxy,
     ) as response:
         try:
             if data.get("params", None) is None:
