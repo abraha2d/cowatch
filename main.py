@@ -9,6 +9,7 @@ from os.path import expanduser
 from time import sleep, time
 
 import pytz
+from aiohttp import ClientProxyConnectionError
 from dateutil.rrule import rrule, DAILY
 
 from config import *
@@ -201,6 +202,8 @@ async def main():
                     print()
                     await close_session()
                     return
+        except ClientProxyConnectionError:
+            pass
         finally:
             e = time() - s
             d = max(cycle_delay - e, 0)
