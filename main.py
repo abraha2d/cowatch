@@ -44,7 +44,6 @@ async def find_sessions():
     search_strs = [
         d.strftime("%d-%m-%Y") for d in rrule(DAILY, dtstart=now_date, count=LOOKAHEAD)
     ]
-    print(search_strs)
 
     data = await gather(
         fetch(
@@ -60,7 +59,6 @@ async def find_sessions():
     sessions = flatten(data)
     sessions = filter(session_predicate, sessions)
     sessions = list(sessions)
-    # pprint(sessions)
 
     for session in sessions:
         print()
@@ -169,6 +167,7 @@ async def main():
     cycle_delay = (60 * len(DISTRICTS) * LOOKAHEAD) / MAX_CALLS_PER_MIN
 
     while True:
+        s = time()
         try:
             sessions = await find_sessions()
             if len(sessions) == 0:
@@ -203,8 +202,11 @@ async def main():
                     await close_session()
                     return
         finally:
-            print(f"Sleeping for {cycle_delay} seconds...")
-            sleep(cycle_delay)
+            e = time() - s
+            d = max(cycle_delay - e, 0)
+            print(f"Sleeping for {d:.3f} seconds... ", end="", flush=True)
+            sleep(d)
+            print("Done.")
 
 
 if __name__ == "__main__":
